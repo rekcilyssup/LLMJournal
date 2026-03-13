@@ -7,10 +7,14 @@ import { Textarea } from './components/ui/textarea';
 import { Badge } from './components/ui/badge';
 import { api, JournalEntry, AnalysisResult, Insights } from './lib/api';
 
-const USER_ID = "123";
-
 export default function App() {
+  const initialUserName = typeof window !== 'undefined' ? localStorage.getItem('journalUserName') || '' : '';
+
   // State
+  const [userName, setUserName] = useState(initialUserName);
+  const [userInput, setUserInput] = useState(initialUserName);
+  const [isUserReady, setIsUserReady] = useState(Boolean(initialUserName.trim()));
+
   const [ambience, setAmbience] = useState<'forest' | 'ocean' | 'mountain'>('forest');
   const [text, setText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -21,13 +25,15 @@ export default function App() {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
+  const activeUserId = userName.trim();
+
   // Fetch initial data
-  const fetchData = async () => {
+  const fetchData = async (currentUserId: string) => {
     try {
       setIsLoadingData(true);
       const [historyData, insightsData] = await Promise.all([
-        api.getHistory(USER_ID),
-        api.getInsights(USER_ID)
+        api.getHistory(currentUserId),
+        api.getInsights(currentUserId)
       ]);
       setHistory(historyData);
       setInsights(insightsData);
@@ -38,9 +44,32 @@ export default function App() {
     }
   };
 
+  const handleUserSubmit = () => {
+    const normalized = userInput.trim();
+    if (!normalized) {
+      toast.error('Please enter your name to continue.');
+      return;
+    }
+    setUserName(normalized);
+    setIsUserReady(true);
+    localStorage.setItem('journalUserName', normalized);
+    toast.success(`Welcome, ${normalized}!`);
+  };
+
+  const handleSwitchUser = () => {
+    setIsUserReady(false);
+    setUserInput(userName);
+  };
+
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!isUserReady || !activeUserId) {
+      setHistory([]);
+      setInsights(null);
+      setIsLoadingData(false);
+      return;
+    }
+    fetchData(activeUserId);
+  }, [isUserReady, activeUserId]);
 
   const handleAnalyze = async () => {
     if (!text.trim()) {
@@ -60,6 +89,10 @@ export default function App() {
   };
 
   const handleSave = async () => {
+    if (!activeUserId) {
+      toast.error('Please set your user name first.');
+      return;
+    }
     if (!text.trim()) {
       toast.error("Cannot save an empty journal entry.");
       return;
@@ -67,14 +100,14 @@ export default function App() {
     try {
       setIsSaving(true);
       await api.saveEntry({
-        userId: USER_ID,
+        userId: activeUserId,
         ambience,
         text
       });
       toast.success("Journal entry saved!");
       setText('');
       setAnalysisResult(null);
-      fetchData(); // Refresh history and insights
+      fetchData(activeUserId); // Refresh history and insights
     } catch (error) {
       toast.error("Failed to save entry.");
     } finally {
@@ -96,14 +129,46 @@ export default function App() {
       <Toaster position="top-right" />
       
       <header className="max-w-6xl mx-auto mb-8 flex items-center gap-3">
-        <div className="p-2 bg-zinc-900 text-white rounded-xl shadow-sm">
-          <BookHeart className="w-6 h-6" />
+        <div className="flex items-center gap-3 flex-1">
+          <div className="p-2 bg-zinc-900 text-white rounded-xl shadow-sm">
+            <BookHeart className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">AI-Assisted Journal</h1>
+            <p className="text-sm text-zinc-500">Reflect, analyze, and grow.</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">AI-Assisted Journal</h1>
-          <p className="text-sm text-zinc-500">Reflect, analyze, and grow.</p>
-        </div>
+        {isUserReady && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-zinc-500">User: <strong className="text-zinc-800">{userName}</strong></span>
+            <Button variant="outline" onClick={handleSwitchUser}>Switch</Button>
+          </div>
+        )}
       </header>
+
+      {!isUserReady && (
+        <section className="max-w-6xl mx-auto mb-8">
+          <Card className="border-zinc-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">Start With Your Name</CardTitle>
+              <CardDescription>Your name is used as your journal user id for history and insights.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                placeholder="Enter your name"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleUserSubmit();
+                }}
+              />
+              <Button onClick={handleUserSubmit}>Continue</Button>
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
         
