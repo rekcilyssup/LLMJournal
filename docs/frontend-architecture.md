@@ -1,58 +1,68 @@
-# Frontend Architecture (Current State)
+# Frontend Architecture (v2)
 
 ## Stack
 
 - React 19 + TypeScript
 - Vite 6
-- Tailwind CSS (via `@tailwindcss/vite`)
-- UI helper components in `Frontend/src/components/ui`
-- Notifications with `sonner`
+- Tailwind CSS
+- Sonner for toasts
+- Internal API client in Frontend/src/lib/api.ts
 
-## High-Level Structure
+## Application Shape
 
-- Single-page dashboard app.
-- Main component: `Frontend/src/App.tsx`.
-- API wrapper: `Frontend/src/lib/api.ts`.
-- No routing layer yet.
-- No auth flow yet.
+- Single-page dashboard in Frontend/src/App.tsx
+- No route-level auth yet
+- Username is captured in UI and used as backend userId
 
-## Key Product Flows
+## User Identity Flow
 
-1. Initial page load:
-- Calls history and insights in parallel for the current user.
-- Renders skeleton loaders while fetching.
+1. User enters a name in onboarding card.
+2. Name is stored in localStorage as journalUserName.
+3. Name is reused as userId for all journal/history/insight requests.
+4. User can switch identity from the header switch action.
 
-2. Analyze flow:
-- User writes text and clicks "Analyze Emotion".
-- Frontend calls analyze endpoint.
-- Shows emotion, keywords, and summary in an analysis card.
+## Data Flows
 
-3. Save flow:
-- User clicks "Save Journal Entry".
-- Frontend sends user id, ambience, and text.
-- On success it clears input and refreshes history + insights.
+### 1) Initial Data Load
 
-## State Model (App.tsx)
+- When user identity is ready, frontend fetches in parallel:
+	- GET /api/journal/{userId}
+	- GET /api/journal/insights/{userId}
 
-- `ambience`: one of `forest | ocean | mountain`
-- `text`: journal input text
-- `analysisResult`: result from analysis endpoint
-- `history`: journal entries list
-- `insights`: computed summary metrics
-- loading flags: `isAnalyzing`, `isSaving`, `isLoadingData`
+### 2) Analyze-Only Flow
 
-## Important Runtime Assumptions
+- Analyze button calls:
+	- POST /api/journal/analyze
+- Result is shown immediately in UI card.
 
-- Hardcoded user id is currently `123`.
-- API base URL is `VITE_API_URL`; fallback is `http://localhost:8000`.
-- Date rendering expects an ISO-parseable string for each journal entry (`entry.date`).
+### 3) Save Flow
 
-## Frontend-to-Backend Dependency Summary
+- Save button calls:
+	- POST /api/journal
+- Payload includes userId, ambience, text.
+- Backend persists entry and AI fields.
+- Frontend refreshes history + insights after save.
 
-The frontend expects the backend to provide:
+## Runtime Networking Behavior
 
-- CRUD-ish write/read for journal entries
-- Text analysis for emotion + themes + summary
-- Aggregated user insights
+- API base URL selection order:
 
-Any mismatch in response field names will break rendering because fields are accessed directly.
+1. VITE_API_URL if provided.
+2. Else runtime host with backend port 8000:
+	 window.location.protocol + // + window.location.hostname + :8000
+
+This prevents LAN breakage when frontend is accessed via 192.168.x.x.
+
+## Frontend Contract Assumptions
+
+- JournalEntry.date is ISO-parseable.
+- analysis keywords is always an array.
+- insights recentKeywords is always an array.
+- Field names are case-sensitive and mapped directly in UI.
+
+## Break-Safety Rules For UI Changes
+
+1. Do not rename API fields without backend update.
+2. Keep endpoint paths unchanged unless docs + backend are updated together.
+3. Do not assume null-safe arrays; backend should return empty arrays where required.
+4. Preserve userId strategy unless auth/session model is introduced.

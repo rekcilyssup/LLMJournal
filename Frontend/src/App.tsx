@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Trees, Waves, Mountain, Loader2, BookHeart, Sparkles, History, BarChart2 } from 'lucide-react';
+import { Trees, Waves, Mountain, Loader2, BookHeart, Sparkles, History, BarChart2, X, PanelLeft, PanelRight } from 'lucide-react';
 import { Button } from './components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Textarea } from './components/ui/textarea';
 import { Badge } from './components/ui/badge';
 import { api, JournalEntry, AnalysisResult, Insights } from './lib/api';
@@ -24,6 +24,10 @@ export default function App() {
   const [history, setHistory] = useState<JournalEntry[]>([]);
   const [insights, setInsights] = useState<Insights | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Sidebar State
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isInsightsOpen, setIsInsightsOpen] = useState(false);
 
   const activeUserId = userName.trim();
 
@@ -59,6 +63,10 @@ export default function App() {
   const handleSwitchUser = () => {
     setIsUserReady(false);
     setUserInput(userName);
+    setHistory([]);
+    setInsights(null);
+    setAnalysisResult(null);
+    setText('');
   };
 
   useEffect(() => {
@@ -125,38 +133,20 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans p-4 md:p-8">
+    <div className="relative h-screen w-full bg-zinc-50 text-zinc-900 font-sans overflow-hidden flex">
       <Toaster position="top-right" />
-      
-      <header className="max-w-6xl mx-auto mb-8 flex items-center gap-3">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="p-2 bg-zinc-900 text-white rounded-xl shadow-sm">
-            <BookHeart className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">AI-Assisted Journal</h1>
-            <p className="text-sm text-zinc-500">Reflect, analyze, and grow.</p>
-          </div>
-        </div>
-        {isUserReady && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-zinc-500">User: <strong className="text-zinc-800">{userName}</strong></span>
-            <Button variant="outline" onClick={handleSwitchUser}>Switch</Button>
-          </div>
-        )}
-      </header>
 
       {!isUserReady && (
-        <section className="max-w-6xl mx-auto mb-8">
-          <Card className="border-zinc-200 shadow-sm">
+        <div className="absolute inset-0 z-[60] bg-zinc-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="w-full max-w-md border-zinc-200 shadow-xl">
             <CardHeader>
               <CardTitle className="text-lg">Start With Your Name</CardTitle>
-              <CardDescription>Your name is used as your journal user id for history and insights.</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col sm:flex-row gap-3">
+            <CardContent className="space-y-3">
+              <p className="text-sm text-zinc-600">Your name is used as your journal user id for history and insights.</p>
               <input
                 type="text"
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
+                className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-zinc-900"
                 placeholder="Enter your name"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
@@ -164,41 +154,195 @@ export default function App() {
                   if (e.key === 'Enter') handleUserSubmit();
                 }}
               />
-              <Button onClick={handleUserSubmit}>Continue</Button>
+              <Button className="w-full" onClick={handleUserSubmit}>Continue</Button>
             </CardContent>
           </Card>
-        </section>
+        </div>
+      )}
+      
+      {/* TOP NAVIGATION / FLOATING BUTTONS */}
+      <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-40 pointer-events-none">
+        <Button 
+          variant="outline" 
+          size="sm"
+          className="pointer-events-auto bg-white/80 backdrop-blur-md shadow-sm border-zinc-200 hover:bg-zinc-100 text-zinc-700"
+          onClick={() => setIsHistoryOpen(true)}
+        >
+          <PanelLeft className="w-4 h-4 mr-2" />
+          Recent History
+        </Button>
+        
+        <Button 
+          variant="outline" 
+          size="sm"
+          className="pointer-events-auto bg-white/80 backdrop-blur-md shadow-sm border-zinc-200 hover:bg-zinc-100 text-zinc-700"
+          onClick={() => setIsInsightsOpen(true)}
+        >
+          Insights
+          <PanelRight className="w-4 h-4 ml-2" />
+        </Button>
+      </div>
+
+      {/* LEFT SIDEBAR: HISTORY */}
+      <div 
+        className={`fixed inset-y-0 left-0 w-80 bg-white border-r border-zinc-200 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+          isHistoryOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+          <h2 className="font-semibold flex items-center gap-2 text-zinc-800">
+            <History className="w-4 h-4 text-zinc-500" />
+            Recent History
+          </h2>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-900" onClick={() => setIsHistoryOpen(false)}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          {isLoadingData ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-24 bg-zinc-100 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : history.length > 0 ? (
+            history.map((entry) => (
+              <div key={entry.id} className="p-3 rounded-xl border border-zinc-100 bg-zinc-50/50 hover:bg-zinc-50 transition-colors group">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 bg-white rounded-md shadow-sm">
+                      {getAmbienceIcon(entry.ambience)}
+                    </div>
+                    <span className="text-[11px] font-medium text-zinc-500">
+                      {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  {entry.emotion && (
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-white border-zinc-200">
+                      {entry.emotion}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-600 line-clamp-3 leading-relaxed">
+                  {entry.text}
+                </p>
+              </div>
+            ))
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-2">
+              <BookHeart className="w-6 h-6 opacity-20" />
+              <p className="text-xs">No entries yet.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT SIDEBAR: INSIGHTS */}
+      <div 
+        className={`fixed inset-y-0 right-0 w-80 bg-white border-l border-zinc-200 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+          isInsightsOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        <div className="p-4 border-b border-zinc-100 flex justify-between items-center bg-zinc-50/50">
+          <h2 className="font-semibold flex items-center gap-2 text-zinc-800">
+            <BarChart2 className="w-4 h-4 text-zinc-500" />
+            Insights
+          </h2>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-900" onClick={() => setIsInsightsOpen(false)}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {isLoadingData ? (
+            <div className="grid grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-20 bg-zinc-100 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : insights ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
+                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Total Entries</p>
+                <p className="text-xl font-bold text-zinc-900">{insights.totalEntries}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
+                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Top Emotion</p>
+                <p className="text-sm font-semibold text-zinc-900 truncate">{insights.topEmotion}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center col-span-2">
+                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Top Ambience</p>
+                <div className="flex items-center gap-2">
+                  {getAmbienceIcon(insights.mostUsedAmbience)}
+                  <p className="text-sm font-semibold text-zinc-900 capitalize">{insights.mostUsedAmbience}</p>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center col-span-2">
+                <p className="text-[10px] text-zinc-500 font-medium mb-2 uppercase tracking-wider">Recent Topics</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {insights.recentKeywords.slice(0, 5).map((kw, i) => (
+                    <span key={i} className="text-[10px] px-2 py-0.5 bg-white border border-zinc-200 text-zinc-700 rounded-md">
+                      {kw}
+                    </span>
+                  ))}
+                  {insights.recentKeywords.length === 0 && <span className="text-xs text-zinc-400">None yet</span>}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* BACKDROP FOR MOBILE */}
+      {(isHistoryOpen || isInsightsOpen) && (
+        <div 
+          className="fixed inset-0 bg-zinc-900/20 backdrop-blur-sm z-40 md:hidden transition-opacity"
+          onClick={() => { setIsHistoryOpen(false); setIsInsightsOpen(false); }}
+        />
       )}
 
-      <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* LEFT COLUMN: Input & Analysis */}
-        <div className="lg:col-span-7 space-y-6">
-          <Card className="border-zinc-200 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+      {/* MAIN CENTER AREA */}
+      <main className="flex-1 h-full flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto">
+        <div className="w-full max-w-2xl flex flex-col items-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          
+          {/* Header / Logo */}
+          <div className="text-center space-y-3">
+            <div className="inline-flex p-3 bg-zinc-900 text-white rounded-2xl shadow-lg shadow-zinc-900/20">
+              <BookHeart className="w-8 h-8" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-zinc-900">AI-Assisted Journal</h1>
+            <p className="text-zinc-500 text-sm">Reflect on your day. Let AI uncover your patterns.</p>
+            {isUserReady && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <span className="text-xs text-zinc-500">User: <strong className="text-zinc-800">{userName}</strong></span>
+                <Button variant="outline" size="sm" onClick={handleSwitchUser}>Switch</Button>
+              </div>
+            )}
+          </div>
+
+          {/* New Entry Bounding Box */}
+          <Card className="w-full border-zinc-200 shadow-xl shadow-zinc-200/50 bg-white/80 backdrop-blur-xl">
+            <CardHeader className="pb-4 border-b border-zinc-100/50">
+              <CardTitle className="text-sm font-medium text-zinc-500 uppercase tracking-wider text-center">
                 New Entry
               </CardTitle>
-              <CardDescription>Choose your ambience and write your thoughts.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="p-6 space-y-6">
               
               {/* Ambience Selector */}
               <div className="space-y-3">
-                <label className="text-sm font-medium text-zinc-700">Ambience</label>
-                <div className="flex gap-3">
+                <div className="flex justify-center gap-3">
                   {(['forest', 'ocean', 'mountain'] as const).map((type) => (
                     <button
                       key={type}
                       onClick={() => setAmbience(type)}
-                      className={`flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all ${
+                      className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm transition-all ${
                         ambience === type 
-                          ? 'border-zinc-900 bg-zinc-900/5 ring-1 ring-zinc-900' 
-                          : 'border-zinc-200 bg-white hover:bg-zinc-50'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-md' 
+                          : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
                       }`}
                     >
                       {getAmbienceIcon(type)}
-                      <span className="text-xs font-medium capitalize">{type}</span>
+                      <span className="font-medium capitalize">{type}</span>
                     </button>
                   ))}
                 </div>
@@ -206,10 +350,9 @@ export default function App() {
 
               {/* Textarea */}
               <div className="space-y-3">
-                <label className="text-sm font-medium text-zinc-700">Your Thoughts</label>
                 <Textarea 
                   placeholder="What's on your mind today?"
-                  className="min-h-[200px] resize-y text-base p-4 leading-relaxed"
+                  className="min-h-[180px] resize-y text-base p-4 leading-relaxed border-zinc-200 shadow-inner bg-zinc-50/50 focus:bg-white transition-colors"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                 />
@@ -217,7 +360,7 @@ export default function App() {
 
               {/* Analysis Results Card */}
               {analysisResult && (
-                <Card className="bg-indigo-50/50 border-indigo-100 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <Card className="bg-indigo-50/80 border-indigo-100 shadow-sm animate-in fade-in zoom-in-95 duration-300">
                   <CardHeader className="pb-2 pt-4 px-4">
                     <CardTitle className="text-sm flex items-center gap-2 text-indigo-900">
                       <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -225,23 +368,25 @@ export default function App() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3 px-4 pb-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1.5">Detected Emotion</p>
-                      <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-none px-2.5 py-0.5 text-xs">
-                        {analysisResult.emotion}
-                      </Badge>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1.5">Key Themes</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {analysisResult.keywords.map((kw, i) => (
-                          <Badge key={i} variant="secondary" className="bg-white text-indigo-700 border-indigo-100 text-xs">
-                            {kw}
-                          </Badge>
-                        ))}
+                    <div className="flex items-center gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1.5">Emotion</p>
+                        <Badge className="bg-indigo-100 text-indigo-800 hover:bg-indigo-200 border-none px-2.5 py-0.5 text-xs">
+                          {analysisResult.emotion}
+                        </Badge>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1.5">Themes</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {analysisResult.keywords.map((kw, i) => (
+                            <Badge key={i} variant="secondary" className="bg-white text-indigo-700 border-indigo-100 text-xs">
+                              {kw}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    <div>
+                    <div className="pt-2 border-t border-indigo-100/50">
                       <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Summary</p>
                       <p className="text-sm text-indigo-900 leading-relaxed">{analysisResult.summary}</p>
                     </div>
@@ -253,15 +398,15 @@ export default function App() {
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <Button 
                   variant="outline" 
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-2 h-11 text-zinc-700"
                   onClick={handleAnalyze}
                   disabled={isAnalyzing || !text.trim()}
                 >
-                  {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-indigo-500" />}
                   Analyze Emotion
                 </Button>
                 <Button 
-                  className="flex-1 gap-2"
+                  className="flex-1 gap-2 h-11 bg-zinc-900 hover:bg-zinc-800 text-white shadow-md"
                   onClick={handleSave}
                   disabled={isSaving || !text.trim()}
                 >
@@ -271,106 +416,6 @@ export default function App() {
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* RIGHT COLUMN: Insights & History */}
-        <div className="lg:col-span-5 space-y-6">
-          
-          {/* Insights Dashboard */}
-          <Card className="border-zinc-200 shadow-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <BarChart2 className="w-5 h-5 text-zinc-500" />
-                Insights
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingData ? (
-                <div className="grid grid-cols-2 gap-4">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="h-24 bg-zinc-100 rounded-xl animate-pulse" />
-                  ))}
-                </div>
-              ) : insights ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
-                    <p className="text-xs text-zinc-500 font-medium mb-1">Total Entries</p>
-                    <p className="text-2xl font-bold text-zinc-900">{insights.totalEntries}</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
-                    <p className="text-xs text-zinc-500 font-medium mb-1">Top Emotion</p>
-                    <p className="text-lg font-semibold text-zinc-900 truncate">{insights.topEmotion}</p>
-                  </div>
-                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
-                    <p className="text-xs text-zinc-500 font-medium mb-1">Top Ambience</p>
-                    <div className="flex items-center gap-2">
-                      {getAmbienceIcon(insights.mostUsedAmbience)}
-                      <p className="text-sm font-semibold text-zinc-900 capitalize">{insights.mostUsedAmbience}</p>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
-                    <p className="text-xs text-zinc-500 font-medium mb-2">Recent Topics</p>
-                    <div className="flex flex-wrap gap-1">
-                      {insights.recentKeywords.slice(0, 3).map((kw, i) => (
-                        <span key={i} className="text-[10px] px-1.5 py-0.5 bg-zinc-200 text-zinc-700 rounded-md truncate max-w-full">
-                          {kw}
-                        </span>
-                      ))}
-                      {insights.recentKeywords.length === 0 && <span className="text-xs text-zinc-400">None yet</span>}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          {/* History Feed */}
-          <Card className="border-zinc-200 shadow-sm flex flex-col h-[calc(100vh-24rem)] min-h-[400px]">
-            <CardHeader className="pb-4 shrink-0">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <History className="w-5 h-5 text-zinc-500" />
-                Recent History
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
-              {isLoadingData ? (
-                <div className="space-y-4">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className="h-32 bg-zinc-100 rounded-xl animate-pulse" />
-                  ))}
-                </div>
-              ) : history.length > 0 ? (
-                history.map((entry) => (
-                  <div key={entry.id} className="p-4 rounded-xl border border-zinc-100 bg-white hover:border-zinc-200 transition-colors shadow-sm group">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-zinc-50 rounded-lg group-hover:bg-zinc-100 transition-colors">
-                          {getAmbienceIcon(entry.ambience)}
-                        </div>
-                        <span className="text-xs font-medium text-zinc-500">
-                          {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
-                      </div>
-                      {entry.emotion && (
-                        <Badge variant="secondary" className="text-[10px] px-2 py-0 h-5">
-                          {entry.emotion}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-zinc-700 line-clamp-3 leading-relaxed">
-                      {entry.text}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-3">
-                  <BookHeart className="w-8 h-8 opacity-20" />
-                  <p className="text-sm">No journal entries yet.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
         </div>
       </main>
     </div>
