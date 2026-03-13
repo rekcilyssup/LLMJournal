@@ -36,13 +36,28 @@ def get_user_insights(userId: str, db: Session = Depends(get_db)) -> Insights:
 
 
 @router.post("", response_model=JournalEntry, status_code=201)
-def save_journal_entry(
+async def save_journal_entry(
     payload: JournalEntryCreate,
     db: Session = Depends(get_db),
+    llm_service: BaseLLMService = Depends(get_llm_service),
 ) -> JournalEntry:
     if not payload.text.strip():
         raise HTTPException(status_code=400, detail="Text is required")
-    return JournalService.create_entry(db, payload)
+
+    llm_result = await llm_service.analyze_emotion(payload.text)
+    if not all(key in llm_result for key in ("emotion", "keywords", "summary")):
+        raise HTTPException(status_code=502, detail="LLM provider returned invalid schema")
+
+    raw_keywords = llm_result.get("keywords")
+    keywords = [str(item).strip() for item in raw_keywords if str(item).strip()] if isinstance(raw_keywords, list) else []
+
+    return JournalService.create_entry(
+        db,
+        payload,
+        emotion=str(llm_result.get("emotion", "neutral")).strip() or "neutral",
+        keywords=keywords,
+        summary=str(llm_result.get("summary", "")).strip(),
+    )
 
 
 @router.get("/{userId}", response_model=list[JournalEntry])

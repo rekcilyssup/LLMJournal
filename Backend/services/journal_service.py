@@ -10,11 +10,20 @@ from models.schemas import Insights, JournalEntry, JournalEntryCreate
 
 class JournalService:
     @staticmethod
-    def create_entry(db: Session, payload: JournalEntryCreate) -> JournalEntry:
+    def create_entry(
+        db: Session,
+        payload: JournalEntryCreate,
+        emotion: str | None = None,
+        keywords: list[str] | None = None,
+        summary: str | None = None,
+    ) -> JournalEntry:
         entry = JournalEntryDB(
             user_id=payload.userId,
             ambience=payload.ambience,
             text=payload.text,
+            emotion=emotion,
+            keywords_json=json.dumps(keywords) if keywords is not None else None,
+            summary=summary,
         )
         db.add(entry)
         db.commit()
