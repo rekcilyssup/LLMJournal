@@ -1,181 +1,120 @@
-# Backend API Contract (Required by Current Frontend)
+# Backend API Contract (v2)
 
-## Base URL
+All endpoints are under /api/journal.
 
-- `VITE_API_URL` if set
-- otherwise defaults to `http://localhost:8000`
+## Compatibility Objective
 
-All endpoints are under `/api/journal`.
+Frontend can evolve UI freely as long as this API contract remains stable.
+Any contract change must update both frontend and backend in the same release.
 
-## Data Types
+## Database Context
+
+- Primary store: PostgreSQL
+- Journal table includes:
+  id, user_id, ambience, text, date, emotion, keywords_json, summary
+
+## Core Schemas
 
 ### JournalEntry
 
-```ts
 {
-  id: string;
-  userId: string;
-  ambience: string; // expected values today: forest | ocean | mountain
-  text: string;
-  date: string; // ISO date string recommended
-  emotion?: string;
-  keywords?: string[];
-  summary?: string;
+  id: string,
+  userId: string,
+  ambience: string,
+  text: string,
+  date: string,
+  emotion?: string,
+  keywords?: string[],
+  summary?: string
 }
-```
 
 ### AnalysisResult
 
-```ts
 {
-  emotion: string;
-  keywords: string[];
-  summary: string;
+  emotion: string,
+  keywords: string[],
+  summary: string
 }
-```
 
 ### Insights
 
-```ts
 {
-  totalEntries: number;
-  topEmotion: string;
-  mostUsedAmbience: string;
-  recentKeywords: string[];
+  totalEntries: number,
+  topEmotion: string,
+  mostUsedAmbience: string,
+  recentKeywords: string[]
 }
-```
 
 ## Endpoints
 
-Critical routing note:
+### 1) Save Journal Entry (AI Persisted)
 
-- If using Express (or similar), define static routes before dynamic parameter routes.
-- Register `/api/journal/analyze` and `/api/journal/insights/:userId` before `/api/journal/:userId`.
-- Otherwise `/api/journal/analyze` can be incorrectly treated as `userId = "analyze"`.
+- Method: POST
+- Path: /api/journal
+- Request:
 
-## 1) Save Journal Entry
-
-- Method: `POST`
-- Path: `/api/journal`
-- Request body:
-
-```json
 {
-  "userId": "123",
+  "userId": "Aravind",
   "ambience": "forest",
-  "text": "Today I felt better after a walk."
+  "text": "I feel anxious but hopeful."
 }
-```
 
-- Success response: `200` or `201` with full `JournalEntry` JSON.
-- Frontend behavior on failure: shows "Failed to save entry" toast.
+- Behavior:
 
-Implementation notes:
+1. Validates text is non-empty.
+2. Calls LLM analysis during save.
+3. Persists emotion, keywords_json, summary with base entry.
 
-- Validate non-empty `text` server-side too.
-- Populate `id` and `date` on the server.
-- Optional: enrich saved entry with `emotion`, `keywords`, `summary` if analysis runs on save.
+- Response: 201 JournalEntry
 
-## 2) Get Journal History
+### 2) Analyze Text Only
 
-- Method: `GET`
-- Path: `/api/journal/:userId`
-- Success response: array of `JournalEntry`.
+- Method: POST
+- Path: /api/journal/analyze
+- Request:
 
-Example response:
-
-```json
-[
-  {
-    "id": "e1",
-    "userId": "123",
-    "ambience": "ocean",
-    "text": "I felt calm today.",
-    "date": "2026-03-12T10:15:00.000Z",
-    "emotion": "calm"
-  }
-]
-```
-
-Implementation notes:
-
-- Return newest-first if possible; UI labels section as "Recent History".
-- Keep date field parseable by JavaScript `Date`.
-
-## 3) Analyze Journal Text
-
-- Method: `POST`
-- Path: `/api/journal/analyze`
-- Request body:
-
-```json
 {
-  "text": "I am nervous but hopeful about tomorrow."
+  "text": "I feel anxious but hopeful."
 }
-```
 
-- Success response: `AnalysisResult`.
+- Response: AnalysisResult
 
-Example response:
+### 3) Get History
 
-```json
-{
-  "emotion": "hopeful",
-  "keywords": ["nervous", "future", "growth"],
-  "summary": "The entry reflects anxiety mixed with optimism about upcoming events."
-}
-```
+- Method: GET
+- Path: /api/journal/{userId}
+- Response: JournalEntry[] (newest first)
 
-Implementation notes:
+### 4) Get Insights
 
-- Always return all three fields (`emotion`, `keywords`, `summary`).
-- Return an empty array for `keywords` instead of null.
+- Method: GET
+- Path: /api/journal/insights/{userId}
+- Response: Insights
 
-## 4) Get User Insights
+## Non-Breaking Rules
 
-- Method: `GET`
-- Path: `/api/journal/insights/:userId`
-- Success response: `Insights`.
+1. Do not rename userId, ambience, text, date, emotion, keywords, summary.
+2. keywords and recentKeywords should be arrays, not null.
+3. date must stay ISO-parseable for JS clients.
+4. Preserve endpoint paths exactly.
 
-Example response:
+## CORS and Networking
 
-```json
-{
-  "totalEntries": 18,
-  "topEmotion": "calm",
-  "mostUsedAmbience": "forest",
-  "recentKeywords": ["gratitude", "focus", "family"]
-}
-```
+- Backend allows localhost and LAN origins for port 3000 via allow_origins + allow_origin_regex.
+- This supports frontend access from local and 192.168.x.x clients.
 
-Implementation notes:
+## Error Contract (Recommended)
 
-- `recentKeywords` should always be an array (can be empty).
-- `mostUsedAmbience` should align with known ambience values when possible.
-
-## Error Shape Recommendation
-
-The frontend currently only checks HTTP status and does not parse error JSON.
-Recommended standard for future-proofing:
-
-```json
 {
   "error": {
     "code": "VALIDATION_ERROR",
     "message": "Text is required"
   }
 }
-```
 
-## Backend Build Priorities
+## Change Checklist Before Frontend Merge
 
-1. Implement the 4 endpoints with exact response fields.
-2. Ensure CORS allows frontend origin (Vite dev server, typically `http://localhost:3000`).
-3. Use stable date serialization (ISO 8601).
-4. Keep nulls out of array fields expected by UI (`keywords`, `recentKeywords`).
-
-## Gaps To Address Soon
-
-- Replace hardcoded user id with real authentication/session identity.
-- Decide whether analysis is synchronous or async during save.
-- Add pagination/filtering for history when volume grows.
+1. Save endpoint still returns JournalEntry with optional AI fields.
+2. History and insights paths unchanged.
+3. Analyze endpoint unchanged.
+4. Regression test from browser and LAN URL passes.
