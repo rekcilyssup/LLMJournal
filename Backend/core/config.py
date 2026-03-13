@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -16,6 +17,7 @@ class Settings:
     cloud_llm_model: str
     cloud_llm_api_key: str
     backend_cors_origins: list[str]
+    backend_cors_origin_regex: Optional[str]
 
 
 
@@ -33,5 +35,12 @@ settings = Settings(
     cloud_llm_api_key=os.getenv("CLOUD_LLM_API_KEY", "").strip(),
     backend_cors_origins=_parse_cors_origins(
         os.getenv("BACKEND_CORS_ORIGINS", "http://localhost:3000")
+    ),
+    backend_cors_origin_regex=(
+        os.getenv(
+            "BACKEND_CORS_ORIGIN_REGEX",
+            r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):3000$",
+        ).strip()
+        or None
     ),
 )

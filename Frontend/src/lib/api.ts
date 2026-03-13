@@ -22,7 +22,14 @@ export interface Insights {
   recentKeywords: string[];
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const runtimeApiBaseUrl =
+  typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:8000`
+    : 'http://localhost:8000';
+
+const configuredApiUrl = (import.meta as { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL;
+
+const API_BASE_URL = configuredApiUrl || runtimeApiBaseUrl;
 
 export const api = {
   saveEntry: async (entry: { userId: string; ambience: string; text: string }): Promise<JournalEntry> => {
