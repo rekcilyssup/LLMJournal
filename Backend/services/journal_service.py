@@ -1,4 +1,6 @@
 import json
+from collections import Counter
+from datetime import datetime
 from datetime import timezone
 
 from sqlalchemy import desc, func, or_, select
@@ -129,6 +131,169 @@ class JournalService:
             )
 
         return "\n".join(lines)
+
+    @staticmethod
+    def looks_like_prompt_echo(summary: str, timeline_input: str) -> bool:
+        if not summary:
+            return True
+
+        normalized_summary = " ".join(summary.lower().split())
+        normalized_input = " ".join(timeline_input.lower().split())
+
+        suspicious_markers = (
+            "analyze this user's mental state over time",
+            "analyze the journal text and return strict json",
+            "entries:",
+        )
+        if any(marker in normalized_summary for marker in suspicious_markers):
+            return True
+
+        if normalized_input.startswith(normalized_summary[:80]):
+            return True
+
+        return False
+
+    @staticmethod
+    def build_timeline_summary(
+        timeline_rows: list[dict[str, str | list[str]]],
+        emotion: str,
+        keywords: list[str],
+    ) -> str:
+        entry_count = len(timeline_rows)
+        start_label = JournalService.format_date_label(str(timeline_rows[0].get("date", "")))
+        end_label = JournalService.format_date_label(str(timeline_rows[-1].get("date", "")))
+
+        if keywords:
+            themes = ", ".join(keywords[:4])
+            return (
+                f"From {start_label} to {end_label} across {entry_count} entries, the overall emotional pattern appears {emotion}. "
+                f"Recurring themes include {themes}. A helpful next step is a short daily check-in to notice early stress signals and protect momentum."
+            )
+
+        return (
+            f"From {start_label} to {end_label} across {entry_count} entries, the overall emotional pattern appears {emotion}. "
+            "A helpful next step is a short daily check-in to notice shifts earlier and respond with small, supportive adjustments."
+        )
+
+    @staticmethod
+    def normalize_keywords(value: object) -> list[str]:
+        if not isinstance(value, list):
+            return []
+
+        normalized: list[str] = []
+        for item in value:
+            if isinstance(item, list):
+                joined = ", ".join(str(part).strip() for part in item if str(part).strip())
+                if joined:
+                    normalized.append(joined)
+                continue
+
+            text = str(item).strip()
+            if text:
+                normalized.append(text)
+
+        return normalized
+
+    @staticmethod
+    def normalize_emotion(value: object, timeline_rows: list[dict[str, str | list[str]]]) -> str:
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.startswith("[") and raw.endswith("]"):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list) and parsed:
+                        return str(parsed[-1]).strip() or "neutral"
+                except Exception:
+                    pass
+            return raw or "neutral"
+
+        if isinstance(value, list) and value:
+            return str(value[-1]).strip() or "neutral"
+
+        if timeline_rows:
+            recent = str(timeline_rows[-1].get("emotion", "neutral")).strip()
+            if recent:
+                return recent
+
+        return "neutral"
+
+    @staticmethod
+    def normalize_summary(value: object, timeline_rows: list[dict[str, str | list[str]]]) -> str:
+        if isinstance(value, str):
+            summary = value.strip()
+            if summary.startswith("[") and summary.endswith("]"):
+                try:
+                    parsed = json.loads(summary)
+                    if isinstance(parsed, list):
+                        cleaned_parts = [str(item).strip() for item in parsed if str(item).strip()]
+                        if cleaned_parts:
+                            return " ".join(cleaned_parts)
+                except Exception:
+                    pass
+            return summary
+
+        if isinstance(value, list):
+            cleaned_parts = [str(item).strip() for item in value if str(item).strip()]
+            if cleaned_parts:
+                return " ".join(cleaned_parts)
+
+        if timeline_rows:
+            first_date = str(timeline_rows[0].get("date", "")).split("T", 1)[0]
+            last_date = str(timeline_rows[-1].get("date", "")).split("T", 1)[0]
+            return (
+                f"From {first_date} to {last_date}, your emotional pattern shows meaningful changes over time, "
+                "with recurring themes visible in your keywords; continue using small reflective check-ins to stay grounded."
+            )
+
+        return ""
+
+    @staticmethod
+    def derive_keywords_from_rows(timeline_rows: list[dict[str, str | list[str]]]) -> list[str]:
+        seen: set[str] = set()
+        keywords: list[str] = []
+        for row in timeline_rows:
+            raw = row.get("keywords")
+            if not isinstance(raw, list):
+                continue
+            for item in raw:
+                word = str(item).strip()
+                if not word:
+                    continue
+                lowered = word.lower()
+                if lowered in seen:
+                    continue
+                seen.add(lowered)
+                keywords.append(word)
+                if len(keywords) >= 6:
+                    return keywords
+        return keywords
+
+    @staticmethod
+    def derive_trend_from_rows(timeline_rows: list[dict[str, str | list[str]]]) -> str:
+        emotions: list[str] = []
+        for row in timeline_rows:
+            raw = str(row.get("emotion", "")).strip().lower()
+            if raw and raw != "unknown":
+                emotions.append(raw)
+
+        if not emotions:
+            return "neutral"
+
+        if len(set(emotions)) >= 2:
+            return "mixed"
+
+        counts = Counter(emotions)
+        return counts.most_common(1)[0][0]
+
+    @staticmethod
+    def format_date_label(value: str) -> str:
+        if not value:
+            return "the period"
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return dt.strftime("%B %-d")
+        except Exception:
+            return value.split("T", 1)[0]
 
     @staticmethod
     def search_history(db: Session, user_id: str, query: str) -> list[JournalEntry]:
