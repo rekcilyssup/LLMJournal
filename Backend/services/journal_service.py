@@ -1,7 +1,7 @@
 import json
 from datetime import timezone
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from models.db_models import JournalEntryDB
@@ -51,21 +51,121 @@ class JournalService:
         return [JournalService._to_schema(row) for row in rows]
 
     @staticmethod
-    def build_timeline_analysis_input(entries: list[JournalEntry]) -> str:
+    def get_timeline_analysis_rows(db: Session, user_id: str) -> list[dict[str, str | list[str]]]:
+        """Fetch only timeline fields equivalent to: select date, emotion, keywords_json from journal_entries."""
+        stmt = (
+            select(JournalEntryDB.date, JournalEntryDB.emotion, JournalEntryDB.keywords_json)
+            .where(JournalEntryDB.user_id == user_id)
+            .order_by(JournalEntryDB.date.asc())
+        )
+        rows = db.execute(stmt).all()
+
+        timeline_rows: list[dict[str, str | list[str]]] = []
+        for date_value, emotion_value, keywords_json in rows:
+            parsed_keywords: list[str] = []
+            if keywords_json:
+                try:
+                    raw = json.loads(keywords_json)
+                    if isinstance(raw, list):
+                        parsed_keywords = [str(item).strip() for item in raw if str(item).strip()]
+                except json.JSONDecodeError:
+                    parsed_keywords = []
+
+            date_iso = date_value
+            if date_iso.tzinfo is None:
+                date_iso = date_iso.replace(tzinfo=timezone.utc)
+
+            timeline_rows.append(
+                {
+                    "date": date_iso.isoformat(),
+                    "emotion": (emotion_value or "unknown").strip() if isinstance(emotion_value, str) else "unknown",
+                    "keywords": parsed_keywords,
+                }
+            )
+
+        return timeline_rows
+
+    @staticmethod
+    def build_timeline_analysis_input(rows: list[dict[str, str | list[str]]]) -> str:
         lines = [
-            "Analyze this user's mental state over time based on dated journal metadata.",
-            "Focus on trajectory, recurring patterns, and major emotional shifts.",
+            "Return strict JSON with keys: emotion (string), keywords (string array), summary (string).",
+            "Analyze the emotional progression across these journal entries over time.",
+            "Describe how feelings change from earlier to recent entries, possible triggers, and patterns.",
+            "Write one clear paragraph with a brief supportive suggestion.",
+            "In the summary, reference timing naturally using month/day labels like 'on March 12' or 'by March 14'.",
+            "Do not return arrays, object-like text, quoted keys, or bullet points in emotion/summary.",
             "Entries:",
         ]
 
-        for entry in entries:
-            keywords = ", ".join(entry.keywords or []) if entry.keywords else "none"
-            emotion = entry.emotion or "unknown"
+        for row in rows:
+            keywords_value = row.get("keywords")
+            keywords = ", ".join(keywords_value) if isinstance(keywords_value, list) and keywords_value else "none"
+            date_value = str(row.get("date", ""))
+            emotion = str(row.get("emotion", "unknown"))
+            display_date = date_value
+            try:
+                display_date = date_value.split("T", 1)[0]
+                year, month, day = display_date.split("-")
+                month_name = [
+                    "January",
+                    "February",
+                    "March",
+                    "April",
+                    "May",
+                    "June",
+                    "July",
+                    "August",
+                    "September",
+                    "October",
+                    "November",
+                    "December",
+                ][int(month) - 1]
+                display_date = f"{month_name} {int(day)}, {year}"
+            except Exception:
+                pass
+
             lines.append(
-                f"- date={entry.date}; emotion={emotion}; keywords={keywords}"
+                f"- date={date_value} ({display_date}); emotion={emotion}; keywords={keywords}"
             )
 
         return "\n".join(lines)
+
+    @staticmethod
+    def search_history(db: Session, user_id: str, query: str) -> list[JournalEntry]:
+        normalized = query.strip()
+        if not normalized:
+            return JournalService.get_history(db, user_id)
+
+        like_query = f"%{normalized}%"
+        stmt = (
+            select(JournalEntryDB)
+            .where(
+                JournalEntryDB.user_id == user_id,
+                or_(
+                    JournalEntryDB.text.ilike(like_query),
+                    JournalEntryDB.emotion.ilike(like_query),
+                    JournalEntryDB.summary.ilike(like_query),
+                    JournalEntryDB.keywords_json.ilike(like_query),
+                ),
+            )
+            .order_by(desc(JournalEntryDB.date))
+        )
+        rows = db.execute(stmt).scalars().all()
+        return [JournalService._to_schema(row) for row in rows]
+
+    @staticmethod
+    def delete_entry(db: Session, user_id: str, entry_id: str) -> bool:
+        stmt = select(JournalEntryDB).where(
+            JournalEntryDB.id == entry_id,
+            JournalEntryDB.user_id == user_id,
+        )
+        row = db.execute(stmt).scalar_one_or_none()
+        if not row:
+            return False
+
+        db.delete(row)
+        db.commit()
+        return True
 
     @staticmethod
     def get_insights(db: Session, user_id: str) -> Insights:

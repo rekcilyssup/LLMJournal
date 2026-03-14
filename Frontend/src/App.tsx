@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Toaster, toast } from 'sonner';
-import { Trees, Waves, Mountain, Loader2, BookHeart, Sparkles, History, BarChart2, X, PanelLeft, PanelRight } from 'lucide-react';
+import { Trees, Waves, Mountain, Loader2, BookHeart, Sparkles, History, BarChart2, X, PanelLeft, PanelRight, Search, Trash2 } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Textarea } from './components/ui/textarea';
@@ -25,6 +25,8 @@ export default function App() {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [openedEntry, setOpenedEntry] = useState<JournalEntry | null>(null);
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [isDeletingEntryId, setIsDeletingEntryId] = useState<string | null>(null);
   const [timelineInsights, setTimelineInsights] = useState<TimelineMentalStateInsights | null>(null);
   const [isTimelineAnalyzing, setIsTimelineAnalyzing] = useState(false);
   const [timelineProgress, setTimelineProgress] = useState(0);
@@ -52,6 +54,63 @@ export default function App() {
     }
   };
 
+  const fetchHistory = async (currentUserId: string, query: string = '') => {
+    const trimmed = query.trim();
+    const historyData = trimmed
+      ? await api.searchHistory(currentUserId, trimmed)
+      : await api.getHistory(currentUserId);
+    setHistory(historyData);
+  };
+
+  const handleHistorySearch = async () => {
+    if (!activeUserId) return;
+    try {
+      setIsLoadingData(true);
+      await fetchHistory(activeUserId, historyQuery);
+    } catch (error) {
+      toast.error('Failed to search records.');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  const handleClearHistorySearch = async () => {
+    setHistoryQuery('');
+    if (!activeUserId) return;
+    try {
+      setIsLoadingData(true);
+      await fetchHistory(activeUserId, '');
+    } catch (error) {
+      toast.error('Failed to reload records.');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  const handleDeleteEntry = async (entry: JournalEntry) => {
+    if (!activeUserId) return;
+
+    const confirmed = window.confirm('Delete this journal record permanently?');
+    if (!confirmed) return;
+
+    try {
+      setIsDeletingEntryId(entry.id);
+      await api.deleteEntry(activeUserId, entry.id);
+      if (openedEntry?.id === entry.id) {
+        setOpenedEntry(null);
+      }
+      await Promise.all([
+        fetchHistory(activeUserId, historyQuery),
+        api.getInsights(activeUserId).then(setInsights),
+      ]);
+      toast.success('Record deleted successfully.');
+    } catch (error) {
+      toast.error('Failed to delete record.');
+    } finally {
+      setIsDeletingEntryId(null);
+    }
+  };
+
   const handleUserSubmit = () => {
     const normalized = userInput.trim();
     if (!normalized) {
@@ -68,6 +127,7 @@ export default function App() {
     setIsUserReady(false);
     setUserInput(userName);
     setHistory([]);
+    setHistoryQuery('');
     setInsights(null);
     setTimelineInsights(null);
     setTimelineProgress(0);
@@ -249,6 +309,32 @@ export default function App() {
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+          <div className="sticky top-0 z-10 bg-white pb-2">
+            <div className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2 py-2 bg-zinc-50">
+              <Search className="w-4 h-4 text-zinc-400" />
+              <input
+                type="text"
+                value={historyQuery}
+                onChange={(e) => setHistoryQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleHistorySearch();
+                  }
+                }}
+                className="w-full bg-transparent text-sm text-zinc-700 outline-none"
+                placeholder="Search records..."
+              />
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-8" onClick={handleHistorySearch}>
+                Search
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8" onClick={handleClearHistorySearch}>
+                Clear
+              </Button>
+            </div>
+          </div>
+
           {isLoadingData ? (
             <div className="space-y-2">
               {[1, 2, 3].map(i => (
@@ -257,36 +343,55 @@ export default function App() {
             </div>
           ) : history.length > 0 ? (
             history.map((entry) => (
-              <button
+              <div
                 key={entry.id}
-                type="button"
-                onClick={() => setOpenedEntry(entry)}
-                className="w-full text-left p-3 rounded-xl border border-zinc-100 bg-zinc-50/50 hover:bg-zinc-50 transition-colors group"
+                className="relative w-full p-3 rounded-xl border border-zinc-100 bg-zinc-50/50 hover:bg-zinc-50 transition-colors group"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1 bg-white rounded-md shadow-sm">
-                      {getAmbienceIcon(entry.ambience)}
-                    </div>
-                    <span className="text-[11px] font-medium text-zinc-500">
-                      {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </span>
-                  </div>
-                  {entry.emotion && (
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-white border-zinc-200">
-                      {entry.emotion}
-                    </Badge>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-2 h-7 w-7 text-zinc-500 hover:text-red-600"
+                  disabled={isDeletingEntryId === entry.id}
+                  onClick={() => handleDeleteEntry(entry)}
+                  title="Delete record"
+                >
+                  {isDeletingEntryId === entry.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
                   )}
-                </div>
-                <p className="text-xs text-zinc-600 line-clamp-3 leading-relaxed">
-                  {entry.text}
-                </p>
-              </button>
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setOpenedEntry(entry)}
+                  className="w-full text-left pr-10"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1 bg-white rounded-md shadow-sm">
+                        {getAmbienceIcon(entry.ambience)}
+                      </div>
+                      <span className="text-[11px] font-medium text-zinc-500">
+                        {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    {entry.emotion && (
+                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 bg-white border-zinc-200">
+                        {entry.emotion}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-600 line-clamp-3 leading-relaxed">
+                    {entry.text}
+                  </p>
+                </button>
+              </div>
             ))
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-2">
               <BookHeart className="w-6 h-6 opacity-20" />
-              <p className="text-xs">No entries yet.</p>
+              <p className="text-xs">No matching records.</p>
             </div>
           )}
         </div>
@@ -323,6 +428,35 @@ export default function App() {
             </div>
           ) : insights ? (
             <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
+                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Total Entries</p>
+                <p className="text-xl font-bold text-zinc-900">{insights.totalEntries}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
+                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Top Emotion</p>
+                <p className="text-sm font-semibold text-zinc-900 truncate">{insights.topEmotion}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center col-span-2">
+                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Top Ambience</p>
+                <div className="flex items-center gap-2">
+                  {getAmbienceIcon(insights.mostUsedAmbience)}
+                  <p className="text-sm font-semibold text-zinc-900 capitalize">{insights.mostUsedAmbience}</p>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center col-span-2">
+                <p className="text-[10px] text-zinc-500 font-medium mb-2 uppercase tracking-wider">Recent Topics</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {insights.recentKeywords.slice(0, 5).map((kw, i) => (
+                    <span key={i} className="text-[10px] px-2 py-0.5 bg-white border border-zinc-200 text-zinc-700 rounded-md">
+                      {kw}
+                    </span>
+                  ))}
+                  {insights.recentKeywords.length === 0 && <span className="text-xs text-zinc-400">None yet</span>}
+                </div>
+              </div>
+              </div>
+
               <Button
                 className="w-full h-10 bg-zinc-900 hover:bg-zinc-800 text-white"
                 onClick={handleAnalyzeTimeline}
@@ -390,35 +524,6 @@ export default function App() {
                   </CardContent>
                 </Card>
               )}
-
-              <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
-                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Total Entries</p>
-                <p className="text-xl font-bold text-zinc-900">{insights.totalEntries}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
-                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Top Emotion</p>
-                <p className="text-sm font-semibold text-zinc-900 truncate">{insights.topEmotion}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center col-span-2">
-                <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Top Ambience</p>
-                <div className="flex items-center gap-2">
-                  {getAmbienceIcon(insights.mostUsedAmbience)}
-                  <p className="text-sm font-semibold text-zinc-900 capitalize">{insights.mostUsedAmbience}</p>
-                </div>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center col-span-2">
-                <p className="text-[10px] text-zinc-500 font-medium mb-2 uppercase tracking-wider">Recent Topics</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {insights.recentKeywords.slice(0, 5).map((kw, i) => (
-                    <span key={i} className="text-[10px] px-2 py-0.5 bg-white border border-zinc-200 text-zinc-700 rounded-md">
-                      {kw}
-                    </span>
-                  ))}
-                  {insights.recentKeywords.length === 0 && <span className="text-xs text-zinc-400">None yet</span>}
-                </div>
-              </div>
-              </div>
             </div>
           ) : null}
         </div>
