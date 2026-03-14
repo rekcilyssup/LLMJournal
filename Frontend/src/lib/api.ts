@@ -66,6 +66,30 @@ export const api = {
       throw error;
     }
   },
+
+  searchHistory: async (userId: string, query: string): Promise<JournalEntry[]> => {
+    try {
+      const params = new URLSearchParams({ q: query });
+      const res = await fetch(`${API_BASE_URL}/api/journal/${userId}?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to search history');
+      return await res.json();
+    } catch (error) {
+      console.error('Error searching history:', error);
+      throw error;
+    }
+  },
+
+  deleteEntry: async (userId: string, entryId: string): Promise<void> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/journal/${userId}/${entryId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete entry');
+    } catch (error) {
+      console.error('Error deleting entry:', error);
+      throw error;
+    }
+  },
   
   analyzeText: async (text: string): Promise<AnalysisResult> => {
     try {
