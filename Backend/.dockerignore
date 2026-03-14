@@ -1,0 +1,9 @@
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.env
+journal.db
+.git
+.gitignore

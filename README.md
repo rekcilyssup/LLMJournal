@@ -57,7 +57,33 @@ LOCAL_LLM_MODEL=llama3.1:8b
 
 Ensure your local model server is running before starting the backend.
 
-## Local Run
+## Docker Run (Recommended)
+
+The easiest way to run everything:
+
+1. Configure your LLM provider (see above):
+
+```
+cp Backend/.env.example Backend/.env
+# Edit Backend/.env — set LLM_PROVIDER and API key
+```
+
+2. Start all services:
+
+```
+docker compose up --build
+```
+
+This launches PostgreSQL, the backend, and the frontend together.
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000/health`
+
+To stop: `docker compose down`
+
+To reset the database: `docker compose down -v`
+
+## Local Run (Without Docker)
 
 ### Backend
 
