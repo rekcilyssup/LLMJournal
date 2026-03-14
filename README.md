@@ -23,6 +23,40 @@ LLM Journal is a full-stack journaling app with AI-assisted emotion analysis, ti
 - `Backend/` API, services, data models
 - `docs/` detailed contract and architecture notes
 
+## LLM Provider Setup
+
+The backend supports **local** and **cloud** LLM providers. Copy the example env file first:
+
+```
+cp Backend/.env.example Backend/.env
+```
+
+**Option A — Cloud (OpenAI / any OpenAI-compatible API):**
+
+Set these values in `Backend/.env`:
+
+```
+LLM_PROVIDER=cloud
+CLOUD_LLM_API_KEY=sk-your-api-key-here
+```
+
+Defaults use `gpt-4o-mini` via `https://api.openai.com/v1`. To use a different model or provider:
+
+```
+CLOUD_LLM_BASE_URL=https://api.openai.com/v1
+CLOUD_LLM_MODEL=gpt-4o-mini
+```
+
+**Option B — Local (Ollama / LM Studio):**
+
+```
+LLM_PROVIDER=local
+LOCAL_LLM_BASE_URL=http://localhost:11434/v1
+LOCAL_LLM_MODEL=llama3.1:8b
+```
+
+Ensure your local model server is running before starting the backend.
+
 ## Local Run
 
 ### Backend
@@ -32,7 +66,7 @@ From repository root:
 1. `python3.12 -m venv .venv`
 2. `. .venv/bin/activate`
 3. `.venv/bin/python -m pip install -r Backend/requirements.txt`
-4. Ensure `Backend/.env` is configured
+4. Configure `Backend/.env` (see LLM Provider Setup above)
 5. `cd Backend`
 6. `../.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000`
 
