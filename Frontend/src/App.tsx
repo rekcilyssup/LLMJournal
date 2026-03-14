@@ -24,6 +24,7 @@ export default function App() {
   const [history, setHistory] = useState<JournalEntry[]>([]);
   const [insights, setInsights] = useState<Insights | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [openedEntry, setOpenedEntry] = useState<JournalEntry | null>(null);
 
   // Sidebar State
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -65,6 +66,7 @@ export default function App() {
     setUserInput(userName);
     setHistory([]);
     setInsights(null);
+    setOpenedEntry(null);
     setAnalysisResult(null);
     setText('');
   };
@@ -198,16 +200,21 @@ export default function App() {
             <X className="w-4 h-4" />
           </Button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
           {isLoadingData ? (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {[1, 2, 3].map(i => (
                 <div key={i} className="h-24 bg-zinc-100 rounded-xl animate-pulse" />
               ))}
             </div>
           ) : history.length > 0 ? (
             history.map((entry) => (
-              <div key={entry.id} className="p-3 rounded-xl border border-zinc-100 bg-zinc-50/50 hover:bg-zinc-50 transition-colors group">
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setOpenedEntry(entry)}
+                className="w-full text-left p-3 rounded-xl border border-zinc-100 bg-zinc-50/50 hover:bg-zinc-50 transition-colors group"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <div className="p-1 bg-white rounded-md shadow-sm">
@@ -226,7 +233,7 @@ export default function App() {
                 <p className="text-xs text-zinc-600 line-clamp-3 leading-relaxed">
                   {entry.text}
                 </p>
-              </div>
+              </button>
             ))
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-zinc-400 space-y-2">
@@ -298,6 +305,71 @@ export default function App() {
           className="fixed inset-0 bg-zinc-900/20 backdrop-blur-sm z-40 md:hidden transition-opacity"
           onClick={() => { setIsHistoryOpen(false); setIsInsightsOpen(false); }}
         />
+      )}
+
+      {openedEntry && (
+        <div className="fixed inset-0 z-[70] bg-zinc-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl max-h-[85vh] overflow-hidden border-zinc-200 shadow-2xl">
+            <CardHeader className="pb-3 border-b border-zinc-100 flex flex-row items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  {getAmbienceIcon(openedEntry.ambience)}
+                  Previous Entry
+                </CardTitle>
+                <p className="text-xs text-zinc-500">
+                  {new Date(openedEntry.date).toLocaleString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+              </div>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setOpenedEntry(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-5 space-y-4 overflow-y-auto max-h-[calc(85vh-5.5rem)]">
+              <div className="flex flex-wrap gap-2 items-center">
+                <Badge variant="secondary" className="bg-zinc-100 text-zinc-700 border-zinc-200">
+                  {openedEntry.ambience}
+                </Badge>
+                {openedEntry.emotion && (
+                  <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                    {openedEntry.emotion}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+                <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">
+                  {openedEntry.text}
+                </p>
+              </div>
+
+              {openedEntry.summary && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Summary</p>
+                  <p className="text-sm text-zinc-700 leading-relaxed">{openedEntry.summary}</p>
+                </div>
+              )}
+
+              {openedEntry.keywords && openedEntry.keywords.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Keywords</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {openedEntry.keywords.map((kw, i) => (
+                      <Badge key={i} variant="secondary" className="bg-white border-zinc-200 text-zinc-700">
+                        {kw}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* MAIN CENTER AREA */}
