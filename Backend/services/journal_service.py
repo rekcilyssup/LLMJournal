@@ -41,6 +41,33 @@ class JournalService:
         return [JournalService._to_schema(row) for row in rows]
 
     @staticmethod
+    def get_history_chronological(db: Session, user_id: str) -> list[JournalEntry]:
+        stmt = (
+            select(JournalEntryDB)
+            .where(JournalEntryDB.user_id == user_id)
+            .order_by(JournalEntryDB.date.asc())
+        )
+        rows = db.execute(stmt).scalars().all()
+        return [JournalService._to_schema(row) for row in rows]
+
+    @staticmethod
+    def build_timeline_analysis_input(entries: list[JournalEntry]) -> str:
+        lines = [
+            "Analyze this user's mental state over time based on dated journal metadata.",
+            "Focus on trajectory, recurring patterns, and major emotional shifts.",
+            "Entries:",
+        ]
+
+        for entry in entries:
+            keywords = ", ".join(entry.keywords or []) if entry.keywords else "none"
+            emotion = entry.emotion or "unknown"
+            lines.append(
+                f"- date={entry.date}; emotion={emotion}; keywords={keywords}"
+            )
+
+        return "\n".join(lines)
+
+    @staticmethod
     def get_insights(db: Session, user_id: str) -> Insights:
         total_entries = db.scalar(
             select(func.count(JournalEntryDB.id)).where(JournalEntryDB.user_id == user_id)

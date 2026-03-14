@@ -22,6 +22,15 @@ export interface Insights {
   recentKeywords: string[];
 }
 
+export interface TimelineMentalStateInsights {
+  entryCount: number;
+  fromDate: string;
+  toDate: string;
+  emotion: string;
+  keywords: string[];
+  summary: string;
+}
+
 const runtimeApiBaseUrl =
   typeof window !== 'undefined'
     ? `${window.location.protocol}//${window.location.hostname}:8000`
@@ -80,6 +89,19 @@ export const api = {
       return await res.json();
     } catch (error) {
       console.error('Error fetching insights:', error);
+      throw error;
+    }
+  },
+
+  analyzeTimeline: async (userId: string): Promise<TimelineMentalStateInsights> => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/journal/insights/${userId}/analyze-timeline`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Failed to analyze timeline');
+      return await res.json();
+    } catch (error) {
+      console.error('Error analyzing timeline:', error);
       throw error;
     }
   }

@@ -5,7 +5,7 @@ import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Textarea } from './components/ui/textarea';
 import { Badge } from './components/ui/badge';
-import { api, JournalEntry, AnalysisResult, Insights } from './lib/api';
+import { api, JournalEntry, AnalysisResult, Insights, TimelineMentalStateInsights } from './lib/api';
 
 export default function App() {
   const initialUserName = typeof window !== 'undefined' ? localStorage.getItem('journalUserName') || '' : '';
@@ -25,6 +25,9 @@ export default function App() {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [openedEntry, setOpenedEntry] = useState<JournalEntry | null>(null);
+  const [timelineInsights, setTimelineInsights] = useState<TimelineMentalStateInsights | null>(null);
+  const [isTimelineAnalyzing, setIsTimelineAnalyzing] = useState(false);
+  const [timelineProgress, setTimelineProgress] = useState(0);
 
   // Sidebar State
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -66,6 +69,8 @@ export default function App() {
     setUserInput(userName);
     setHistory([]);
     setInsights(null);
+    setTimelineInsights(null);
+    setTimelineProgress(0);
     setOpenedEntry(null);
     setAnalysisResult(null);
     setText('');
@@ -122,6 +127,49 @@ export default function App() {
       toast.error("Failed to save entry.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAnalyzeTimeline = async () => {
+    if (!activeUserId) {
+      toast.error('Please set your user name first.');
+      return;
+    }
+
+    const totalEntries = history.length || insights?.totalEntries || 0;
+    if (totalEntries === 0) {
+      toast.error('Create a few entries before running timeline analysis.');
+      return;
+    }
+
+    const estimatedBatches = Math.max(1, Math.ceil(totalEntries / 5));
+    const progressStep = Math.max(6, Math.floor(85 / (estimatedBatches + 2)));
+    let progressTimer: number | undefined;
+
+    try {
+      setIsTimelineAnalyzing(true);
+      setTimelineInsights(null);
+      setTimelineProgress(0);
+
+      progressTimer = window.setInterval(() => {
+        setTimelineProgress((prev) => {
+          const next = prev + progressStep;
+          return next >= 92 ? 92 : next;
+        });
+      }, 350);
+
+      const result = await api.analyzeTimeline(activeUserId);
+      setTimelineInsights(result);
+      setTimelineProgress(100);
+      toast.success('Timeline analysis complete!');
+    } catch (error) {
+      toast.error('Failed to analyze mental state over time.');
+      setTimelineProgress(0);
+    } finally {
+      if (typeof progressTimer === 'number') {
+        window.clearInterval(progressTimer);
+      }
+      setIsTimelineAnalyzing(false);
     }
   };
 
@@ -246,7 +294,7 @@ export default function App() {
 
       {/* RIGHT SIDEBAR: INSIGHTS */}
       <div 
-        className={`fixed inset-y-0 right-0 w-80 bg-white border-l border-zinc-200 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`fixed inset-y-0 right-0 w-full md:w-1/2 bg-white border-l border-zinc-200 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
           isInsightsOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -255,8 +303,15 @@ export default function App() {
             <BarChart2 className="w-4 h-4 text-zinc-500" />
             Insights
           </h2>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-900" onClick={() => setIsInsightsOpen(false)}>
-            <X className="w-4 h-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-zinc-500 hover:text-zinc-900"
+            onClick={() => setIsInsightsOpen(false)}
+            aria-label="Collapse insights panel"
+            title="Collapse insights"
+          >
+            <span className="text-base font-semibold leading-none">&gt;</span>
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-4">
@@ -267,7 +322,76 @@ export default function App() {
               ))}
             </div>
           ) : insights ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
+              <Button
+                className="w-full h-10 bg-zinc-900 hover:bg-zinc-800 text-white"
+                onClick={handleAnalyzeTimeline}
+                disabled={isTimelineAnalyzing}
+              >
+                {isTimelineAnalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Analyze Over Time
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Analyze Over Time
+                  </>
+                )}
+              </Button>
+
+              {isTimelineAnalyzing && (
+                <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-zinc-600">
+                    <span>Processing entries in batches</span>
+                    <span>{timelineProgress}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-zinc-200 overflow-hidden">
+                    <div
+                      className="h-full bg-zinc-900 transition-all duration-300"
+                      style={{ width: `${timelineProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {timelineInsights && (
+                <Card className="border-indigo-200 bg-indigo-50/70">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-indigo-900 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-indigo-700" />
+                      Mental State Over Time
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-[11px] text-indigo-700">
+                      {new Date(timelineInsights.fromDate).toLocaleDateString()} to {new Date(timelineInsights.toDate).toLocaleDateString()} ({timelineInsights.entryCount} entries)
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-500">Trend</p>
+                      <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200">{timelineInsights.emotion}</Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-500">Recurring Themes</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {timelineInsights.keywords.map((kw, i) => (
+                          <Badge key={i} variant="secondary" className="bg-white text-indigo-700 border-indigo-200">
+                            {kw}
+                          </Badge>
+                        ))}
+                        {timelineInsights.keywords.length === 0 && <span className="text-xs text-indigo-500">None detected</span>}
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-indigo-200">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-500 mb-1">Summary</p>
+                      <p className="text-sm text-indigo-900 leading-relaxed">{timelineInsights.summary}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-100 flex flex-col justify-center">
                 <p className="text-[10px] text-zinc-500 font-medium mb-1 uppercase tracking-wider">Total Entries</p>
                 <p className="text-xl font-bold text-zinc-900">{insights.totalEntries}</p>
@@ -293,6 +417,7 @@ export default function App() {
                   ))}
                   {insights.recentKeywords.length === 0 && <span className="text-xs text-zinc-400">None yet</span>}
                 </div>
+              </div>
               </div>
             </div>
           ) : null}
@@ -373,7 +498,11 @@ export default function App() {
       )}
 
       {/* MAIN CENTER AREA */}
-      <main className="flex-1 h-full flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto">
+      <main
+        className={`flex-1 h-full flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto transition-[padding] duration-300 ease-in-out ${
+          isInsightsOpen ? 'md:pr-[50vw]' : 'md:pr-0'
+        }`}
+      >
         <div className="w-full max-w-2xl flex flex-col items-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           
           {/* Header / Logo */}

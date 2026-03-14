@@ -35,3 +35,12 @@ class Insights(BaseModel):
     topEmotion: str
     mostUsedAmbience: str
     recentKeywords: list[str]
+
+
+class TimelineMentalStateInsights(BaseModel):
+    entryCount: int
+    fromDate: str
+    toDate: str
+    emotion: str
+    keywords: list[str]
+    summary: str
