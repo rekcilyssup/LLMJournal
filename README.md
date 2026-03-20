@@ -2,6 +2,10 @@
 
 LLM Journal is a full-stack journaling app with AI-assisted emotion analysis, timeline insights, searchable history, and record deletion.
 
+<img width="1709" height="982" alt="Screenshot 2026-03-13 at 23 17 48" src="https://github.com/user-attachments/assets/3b38c2b2-4556-4b70-ba4e-f4c7ab342b89" />
+
+
+
 ## Tech Stack
 
 - Frontend: React + TypeScript + Vite
